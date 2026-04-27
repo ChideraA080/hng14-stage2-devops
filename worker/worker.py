@@ -10,6 +10,8 @@ r = redis.Redis(
     decode_responses=True
 )
 
+QUEUE_NAME = os.getenv("QUEUE_NAME", "jobs")
+
 running = True
 
 def shutdown(sig, frame):
@@ -27,7 +29,13 @@ def process_job(job_id):
     print(f"Done: {job_id}")
 
 while running:
-    job = r.brpop("jobs", timeout=5)
-    if job:
-        _, job_id = job
-        process_job(job_id)
+    try:
+        job = r.brpop(QUEUE_NAME, timeout=5)
+
+        if job:
+            _, job_id = job
+            process_job(job_id)
+
+    except redis.exceptions.ConnectionError:
+        print("Redis not available, retrying...")
+        time.sleep(3)

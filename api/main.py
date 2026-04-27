@@ -12,6 +12,8 @@ r = redis.Redis(
     decode_responses=True
 )
 
+QUEUE_NAME = os.getenv("QUEUE_NAME", "jobs")
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -19,7 +21,7 @@ def health():
 @app.post("/jobs")
 def create_job():
     job_id = str(uuid.uuid4())
-    r.lpush("jobs", job_id)
+    r.lpush(QUEUE_NAME, job_id)
     r.hset(f"job:{job_id}", "status", "queued")
     return {"job_id": job_id}
 

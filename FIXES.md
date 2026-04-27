@@ -29,8 +29,8 @@ File:api/main.py
 Line 10: wrong queue name "job"
 pythonr.lpush("job", job_id)
 
-Problem: API pushes jobs into a queue called "job" but the worker listens on a queue called "jobs". Jobs go in and never come out — worker never sees them.
-Fix: Change "job" to "jobs"
+Problem: Queue name was hardcoded as "jobs"
+Fix: Introduced environment variable QUEUE_NAME and replaced hardcoded value
 
 ## Bug 5
 file:api/main.py
@@ -137,5 +137,10 @@ Missing entirely: no graceful shutdown
 
 Problem: Docker sends SIGTERM signal when stopping a container. Without handling it, the worker's brpop call hangs and Docker force-kills it after 10 seconds — any job being processed at that moment gets lost.
 Fix: Add signal.signal(SIGTERM, shutdown) with a running flag so the loop exits cleanly
+
+## Bug 7
+File: worker/worker.py
+Problem: Queue name hardcoded and no error handling for Redis failures
+Fix: Introduced QUEUE_NAME environment variable and added retry logic using try/except
 
  
