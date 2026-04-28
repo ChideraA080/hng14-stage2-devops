@@ -2,8 +2,12 @@
 FROM python:3.11-slim AS builder
 
 WORKDIR /app
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+
+# IMPORTANT FIX: install into a known path instead of --user
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
 
 # Stage 2: run app
 FROM python:3.11-slim
@@ -14,13 +18,15 @@ WORKDIR /app
 RUN useradd -m appuser
 USER appuser
 
-# copy dependencies
-COPY --from=builder /root/.local /home/appuser/.local
+# copy installed dependencies from builder stage
+COPY --from=builder /install /home/appuser/.local
 
-# copy code
+# copy app code
 COPY . .
 
+# make python see installed packages
 ENV PATH=/home/appuser/.local/bin:$PATH
+ENV PYTHONPATH=/home/appuser/.local/lib/python3.11/site-packages
 
 EXPOSE 8000
 
