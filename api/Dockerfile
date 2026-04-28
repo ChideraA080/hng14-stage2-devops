@@ -18,7 +18,7 @@ WORKDIR /app
 RUN useradd -m appuser
 
 # copy installed dependencies from builder stage
-COPY --from=builder /install /usr/local
+COPY --from=builder /usr/local /usr/local
 
 # copy app code
 COPY . .
