@@ -36,10 +36,21 @@ jobs:
           cd frontend
           npx eslint . || true
 
-      - name: Lint Dockerfiles
+      # FIXED HADOLINT (NO WILDCARD)
+      - name: Lint API Dockerfile
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: "**/Dockerfile"
+          dockerfile: api/Dockerfile
+
+      - name: Lint Worker Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: worker/Dockerfile
+
+      - name: Lint Frontend Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: frontend/Dockerfile
 
       # ---------------- TEST ----------------
       - name: Install test deps
