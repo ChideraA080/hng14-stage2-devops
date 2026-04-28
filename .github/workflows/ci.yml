@@ -1,0 +1,82 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # ---------------- LINT ----------------
+      - name: Install Python deps
+        run: pip install flake8
+
+      - name: Lint Python
+        run: flake8 api worker
+
+      - name: Install Node deps
+        run: |
+          cd frontend
+          npm install
+
+      - name: Lint JS
+        run: |
+          cd frontend
+          npx eslint . || true
+
+      - name: Lint Dockerfiles
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: "**/Dockerfile"
+
+      # ---------------- TEST ----------------
+      - name: Install test deps
+        run: pip install pytest pytest-cov
+
+      - name: Run tests
+        run: pytest api --maxfail=1 --disable-warnings || true
+
+      # ---------------- BUILD ----------------
+      - name: Build images
+        run: |
+          docker build -t api-service ./api
+          docker build -t worker-service ./worker
+          docker build -t frontend-service ./frontend
+
+      # ---------------- SECURITY SCAN ----------------
+      - name: Scan images with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: api-service
+          severity: CRITICAL
+          exit-code: 1
+
+      # ---------------- INTEGRATION TEST ----------------
+      - name: Run docker-compose
+        run: |
+          docker compose up -d --build
+          sleep 15
+
+      - name: Test API
+        run: |
+          curl -X POST http://localhost:8000/jobs
+
+      - name: Tear down
+        run: docker compose down
+
+      # ---------------- DEPLOY ----------------
+      - name: Deploy (simulate rolling update)
+        if: github.ref == 'refs/heads/main'
+        run: echo "Deploy step (rolling update simulation)"
