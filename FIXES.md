@@ -139,8 +139,9 @@ Problem: Docker sends SIGTERM signal when stopping a container. Without handling
 Fix: Add signal.signal(SIGTERM, shutdown) with a running flag so the loop exits cleanly
 
 ## Bug 7
-File: worker/worker.py
-Problem: Queue name hardcoded and no error handling for Redis failures
-Fix: Introduced QUEUE_NAME environment variable and added retry logic using try/except
+Worker Dockerfile wrong dependency copy path
+File: worker/Dockerfile
 
- 
+Problem: COPY --from=builder /root/.local failed because pip installed to different path
+Fix: changed to pip install --target=/install and copied /install instead
+Why it mattered: container failed to build in CI
