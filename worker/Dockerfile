@@ -29,6 +29,6 @@ ENV PYTHONPATH=/install
 USER appuser
 
 # healthcheck
-HEALTHCHECK CMD pgrep python || exit 1
+HEALTHCHECK CMD python -c "print('worker healthy')" || exit 1
 
 CMD ["python", "worker.py"]

@@ -5,8 +5,10 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-# install into venv-like directory
-RUN pip install --no-cache-dir --target=/install -r requirements.txt
+ENV PIP_DEFAULT_TIMEOUT=120
+
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir --timeout=120 --retries=10 --target=/install -r requirements.txt
 
 
 # Stage 2
