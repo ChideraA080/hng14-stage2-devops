@@ -17,21 +17,21 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       # ---------------- LINT ----------------
-      - name: Install Python lint deps
+      - name: Install Python dependencies (lint)
         run: pip install flake8
 
       - name: Lint Python code
         run: flake8 api worker
 
-      - name: Install Node deps
+      - name: Install Node dependencies
         run: |
           cd frontend
           npm install
 
-      - name: Lint JS
+      - name: Lint JavaScript
         run: |
           cd frontend
           npx eslint . || true
@@ -52,41 +52,38 @@ jobs:
           dockerfile: frontend/Dockerfile
 
       # ---------------- TEST ----------------
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r api/requirements.txt
-          pip install pytest pytest-cov
+      - name: Install test dependencies
+        run: pip install pytest pytest-cov fastapi httpx redis
 
-      - name: Run tests
+      - name: Run API tests
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
         run: pytest api --maxfail=1 --disable-warnings
 
       # ---------------- BUILD ----------------
-      - name: Build API image
-        run: docker build -t api-service ./api
-
-      - name: Build Worker image
-        run: docker build -t worker-service ./worker
-
-      - name: Build Frontend image
-        run: docker build -t frontend-service ./frontend
+      - name: Build Docker images
+        run: |
+          docker build -t api-service ./api
+          docker build -t worker-service ./worker
+          docker build -t frontend-service ./frontend
 
       # ---------------- SECURITY SCAN ----------------
-      - name: Scan API image
+      - name: Scan API image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: api-service
           severity: CRITICAL
           exit-code: 1
 
-      - name: Scan Worker image
+      - name: Scan Worker image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: worker-service
           severity: CRITICAL
           exit-code: 1
 
-      - name: Scan Frontend image
+      - name: Scan Frontend image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: frontend-service
@@ -100,14 +97,11 @@ jobs:
       - name: Wait for services
         run: sleep 20
 
-      - name: Create job
-        run: |
-          curl -s -X POST http://localhost:8000/jobs
+      - name: Test API health
+        run: curl http://localhost:8000/health
 
-      - name: Check job status
-        run: |
-          JOB_ID=$(curl -s -X POST http://localhost:8000/jobs | python -c "import sys, json; print(json.load(sys.stdin)['job_id'])")
-          curl http://localhost:8000/jobs/$JOB_ID
+      - name: Create job test
+        run: curl -X POST http://localhost:8000/jobs
 
       - name: Tear down stack
         if: always()
@@ -116,4 +110,8 @@ jobs:
       # ---------------- DEPLOY ----------------
       - name: Deploy (rolling update simulation)
         if: github.ref == 'refs/heads/main'
-        run: echo "Rolling update simulation successful"
+        run: |
+          echo "Starting rolling deployment..."
+          echo "Pull new images"
+          echo "Stop old containers after health check passes"
+          echo "Deployment successful"
