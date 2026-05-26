@@ -5,6 +5,10 @@
 
 This project is a production-ready containerized microservices system built as part of the HNG14 DevOps Stage 2 task.
 
+It demonstrates a complete event-driven job processing system using Redis as a message broker, fully automated with a CI/CD pipeline.
+
+The system is fully containerized and orchestrated using Docker Compose, with automated testing, security scanning, and deployment simulation using GitHub Actions.
+
 It consists of three services:
 
 - **Frontend (Node.js)** - Submits and tracks jobs
@@ -17,6 +21,29 @@ The entire system is fully containerized using Docker and orchestrated with Dock
 ---
 
 ## Architecture
+
+The system follows an asynchronous queue-based architecture:
+
+Frontend → API → Redis Queue → Worker → Redis (status update)
+
+Flow:
+- Frontend submits job request
+- API generates a job ID and pushes it to Redis queue
+- Worker consumes jobs from Redis
+- Worker processes job and updates status
+- API exposes job status via REST endpoint
+
+Service        Description                          
+  
+- Frontend  →  Node.js app for job submission      
+
+- API       →  FastAPI service for job management   
+
+- Worker    →  Python worker processing Redis queue 
+
+- Redis     →  In-memory message broker             
+
+
 
 Services communicate over a private Docker network:
 
