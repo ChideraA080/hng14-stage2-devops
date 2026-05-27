@@ -15,6 +15,11 @@ jobs:
         ports:
           - 6379:6379
 
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -64,29 +69,46 @@ jobs:
       # ---------------- BUILD ----------------
       - name: Build Docker images
         run: |
-          docker build -t api-service ./api
-          docker build -t worker-service ./worker
-          docker build -t frontend-service ./frontend
+          docker build -t localhost:5000/api-service:latest \
+                       -t localhost:5000/api-service:${{ github.sha }} ./api
+
+          docker build -t localhost:5000/worker-service:latest \
+                       -t localhost:5000/worker-service:${{ github.sha }} ./worker
+
+          docker build -t localhost:5000/frontend-service:latest \
+                       -t localhost:5000/frontend-service:${{ github.sha }} ./frontend
+
+      # ---------------- PUSH ----------------
+      - name: Push images to local registry
+        run: |
+          docker push localhost:5000/api-service:latest
+          docker push localhost:5000/api-service:${{ github.sha }}
+
+          docker push localhost:5000/worker-service:latest
+          docker push localhost:5000/worker-service:${{ github.sha }}
+
+          docker push localhost:5000/frontend-service:latest
+          docker push localhost:5000/frontend-service:${{ github.sha }}
 
       # ---------------- SECURITY SCAN ----------------
       - name: Scan API image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: api-service
+          image-ref: localhost:5000/api-service:latest
           severity: CRITICAL
           exit-code: 1
 
       - name: Scan Worker image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: worker-service
+          image-ref: localhost:5000/worker-service:latest
           severity: CRITICAL
           exit-code: 1
 
       - name: Scan Frontend image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: frontend-service
+          image-ref: localhost:5000/frontend-service:latest
           severity: CRITICAL
           exit-code: 1
 

@@ -29,6 +29,6 @@ ENV PYTHONPATH=/install
 USER appuser
 
 # healthcheck
-HEALTHCHECK CMD python -c "print('worker healthy')" || exit 1
+HEALTHCHECK CMD python -c "import os, redis; r=redis.Redis(host=os.getenv('REDIS_HOST','redis'), port=int(os.getenv('REDIS_PORT',6379))); r.ping()" || exit 1
 
 CMD ["python", "worker.py"]
