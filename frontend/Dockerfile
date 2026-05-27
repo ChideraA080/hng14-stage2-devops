@@ -2,6 +2,9 @@ FROM node:20-alpine3.19
 
 WORKDIR /app
 
+# security updates (IMPORTANT for Trivy)
+RUN apk update && apk upgrade
+
 # install dependencies first
 COPY package*.json ./
 
@@ -11,11 +14,12 @@ RUN npm ci --omit=dev
 COPY . .
 
 # create non-root user
-RUN adduser -D appuser
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 USER appuser
 
 EXPOSE 3000
 
-HEALTHCHECK CMD wget --spider http://localhost:3000/health || exit 1
+HEALTHCHECK CMD wget --spider -q http://localhost:3000/health || exit 1
 
 CMD ["node", "app.js"]
