@@ -23,7 +23,9 @@ FROM python:3.12-slim-bookworm
 WORKDIR /app
 
 # security update (IMPORTANT for Trivy)
-RUN apt-get update && apt-get upgrade -y && apt-get clean
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
 
 # create non-root user
 RUN useradd -m appuser
