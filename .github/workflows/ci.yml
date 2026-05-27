@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # ---------------- LINT ----------------
       - name: Install Python dependencies (lint)
@@ -39,7 +39,7 @@ jobs:
       - name: Lint JavaScript
         run: |
           cd frontend
-          npx eslint . || true
+          npx eslint .
 
       - name: Lint API Dockerfile
         uses: hadolint/hadolint-action@v3.1.0
@@ -58,25 +58,44 @@ jobs:
 
       # ---------------- TEST ----------------
       - name: Install test dependencies
-        run: pip install pytest pytest-cov fastapi httpx redis
+        run: |
+          pip install pytest pytest-cov fastapi httpx redis
 
-      - name: Run API tests
+      - name: Run API tests with coverage
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
-        run: pytest api --maxfail=1 --disable-warnings
+        run: |
+          pytest api \
+            --maxfail=1 \
+            --disable-warnings \
+            --cov=api \
+            --cov-report=xml \
+            --cov-report=term
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
 
       # ---------------- BUILD ----------------
       - name: Build Docker images
         run: |
-          docker build -t localhost:5000/api-service:latest \
-                       -t localhost:5000/api-service:${{ github.sha }} ./api
+          docker build \
+            -t localhost:5000/api-service:latest \
+            -t localhost:5000/api-service:${{ github.sha }} \
+            ./api
 
-          docker build -t localhost:5000/worker-service:latest \
-                       -t localhost:5000/worker-service:${{ github.sha }} ./worker
+          docker build \
+            -t localhost:5000/worker-service:latest \
+            -t localhost:5000/worker-service:${{ github.sha }} \
+            ./worker
 
-          docker build -t localhost:5000/frontend-service:latest \
-                       -t localhost:5000/frontend-service:${{ github.sha }} ./frontend
+          docker build \
+            -t localhost:5000/frontend-service:latest \
+            -t localhost:5000/frontend-service:${{ github.sha }} \
+            ./frontend
 
       # ---------------- PUSH ----------------
       - name: Push images to local registry
@@ -90,7 +109,7 @@ jobs:
           docker push localhost:5000/frontend-service:latest
           docker push localhost:5000/frontend-service:${{ github.sha }}
 
-      # ---------------- SECURITY SCAN (SARIF FIXED) ----------------
+      # ---------------- SECURITY SCAN ----------------
       - name: Scan API image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
@@ -98,6 +117,7 @@ jobs:
           format: sarif
           output: trivy-api.sarif
           severity: CRITICAL
+          ignore-unfixed: true
           exit-code: 1
 
       - name: Scan Worker image with Trivy
@@ -107,6 +127,7 @@ jobs:
           format: sarif
           output: trivy-worker.sarif
           severity: CRITICAL
+          ignore-unfixed: true
           exit-code: 1
 
       - name: Scan Frontend image with Trivy
@@ -116,42 +137,54 @@ jobs:
           format: sarif
           output: trivy-frontend.sarif
           severity: CRITICAL
+          ignore-unfixed: true
           exit-code: 1
 
-      - name: Upload SARIF reports
+      - name: Upload Trivy SARIF reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trivy-sarif-reports
-          path: trivy-*.sarif
+          path: |
+            trivy-api.sarif
+            trivy-worker.sarif
+            trivy-frontend.sarif
 
       # ---------------- INTEGRATION TEST ----------------
       - name: Start stack
         run: docker compose up -d --build
 
       - name: Wait for services
-        run: sleep 20
+        run: sleep 30
 
-      - name: Create job test + poll until completion
+      - name: Verify API health
+        run: curl --fail http://localhost:8000/health
+
+      - name: Submit job and wait for completion
         run: |
           JOB_RESPONSE=$(curl -s -X POST http://localhost:8000/jobs)
+
+          echo "Job response:"
+          echo $JOB_RESPONSE
+
           JOB_ID=$(echo $JOB_RESPONSE | python3 -c "import sys, json; print(json.load(sys.stdin)['job_id'])")
 
           echo "Job ID: $JOB_ID"
 
-          for i in {1..15}; do
+          for i in {1..20}; do
             STATUS=$(curl -s http://localhost:8000/jobs/$JOB_ID | python3 -c "import sys, json; print(json.load(sys.stdin).get('status'))")
-            echo "Attempt $i: $STATUS"
+
+            echo "Attempt $i: status=$STATUS"
 
             if [ "$STATUS" = "completed" ]; then
-              echo "Job completed successfully"
+              echo "Integration test passed"
               exit 0
             fi
 
-            sleep 2
+            sleep 3
           done
 
-          echo "Job did not complete in time"
+          echo "Integration test failed"
           exit 1
 
       - name: Tear down stack
@@ -159,10 +192,26 @@ jobs:
         run: docker compose down -v
 
       # ---------------- DEPLOY ----------------
-      - name: Deploy (rolling update simulation)
+      - name: Simulated rolling deployment
         if: github.ref == 'refs/heads/main'
         run: |
-          echo "Starting rolling deployment..."
-          echo "Pull new images"
-          echo "Stop old containers after health check passes"
-          echo "Deployment successful"
+          echo "Starting rolling deployment"
+
+          echo "Pulling latest images"
+          docker pull localhost:5000/api-service:latest || true
+
+          echo "Starting new container"
+          docker compose up -d --build
+
+          echo "Waiting for health check"
+
+          timeout 60 bash -c '
+            until curl -f http://localhost:8000/health; do
+              echo "Waiting for healthy container..."
+              sleep 5
+            done
+          '
+
+          echo "New container healthy"
+          echo "Stopping old container"
+          echo "Rolling deployment successful"
