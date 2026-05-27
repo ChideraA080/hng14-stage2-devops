@@ -5,10 +5,18 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-ENV PIP_DEFAULT_TIMEOUT=120
+ENV PIP_DEFAULT_TIMEOUT=300
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PIP_NO_CACHE_DIR=1
 
 RUN pip install --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir --timeout=120 --retries=10 --target=/install -r requirements.txt
+    pip install \
+    --no-cache-dir \
+    --default-timeout=300 \
+    --timeout=300 \
+    --retries 50 \
+    --target=/install \
+    -r requirements.txt
 
 
 # Stage 2: runtime
@@ -17,7 +25,8 @@ FROM python:3.12-slim-bookworm
 WORKDIR /app
 
 # security patching (IMPORTANT for Trivy)
-RUN apt-get update && apt-get upgrade -y && apt-get clean
+RUN apt-get update && apt-get upgrade -y && \
+    rm -rf /var/lib/apt/lists/*
 
 # create non-root user
 RUN useradd -m appuser
