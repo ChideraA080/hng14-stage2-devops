@@ -1,5 +1,5 @@
 # Stage 1: builder
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ RUN pip install --upgrade pip setuptools wheel && \
 
 
 # Stage 2: runtime
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim
 
 WORKDIR /app
 
