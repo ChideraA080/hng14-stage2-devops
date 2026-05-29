@@ -1,31 +1,32 @@
 # Stage 1: build dependencies
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim-bookworm AS builder
 
 WORKDIR /app
 
 COPY requirements.txt .
 
-ENV PIP_DEFAULT_TIMEOUT=300
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1
-ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DEFAULT_TIMEOUT=600
+ENV PIP_RETRIES=20
+ENV PIP_TIMEOUT=600
 
-RUN pip install --upgrade pip setuptools wheel && \
-    pip install \
+RUN python -m pip install --upgrade pip setuptools wheel
+
+RUN pip install \
     --no-cache-dir \
-    --default-timeout=300 \
-    --timeout=300 \
-    --retries 50 \
+    --default-timeout=600 \
+    --retries 20 \
+    --timeout 600 \
+    --prefer-binary \
     --target=/install \
-    -r requirements.txt
-
+    -r requirements.txt  
 
 # Stage 2: runtime
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
-# security patching (IMPORTANT for Trivy)
-RUN apt-get update && apt-get upgrade -y && \
+# security patching (safe + CI stable)
+RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # create non-root user

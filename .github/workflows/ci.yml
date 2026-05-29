@@ -116,7 +116,7 @@ jobs:
           image-ref: localhost:5000/api-service:latest
           format: sarif
           output: trivy-api.sarif
-          severity: CRITICAL
+          severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: 1
 
@@ -126,7 +126,7 @@ jobs:
           image-ref: localhost:5000/worker-service:latest
           format: sarif
           output: trivy-worker.sarif
-          severity: CRITICAL
+          severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: 1
 
@@ -136,7 +136,7 @@ jobs:
           image-ref: localhost:5000/frontend-service:latest
           format: sarif
           output: trivy-frontend.sarif
-          severity: CRITICAL
+          severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: 1
 

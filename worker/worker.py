@@ -3,12 +3,14 @@ import time
 import os
 import signal
 
-
 r = redis.Redis(
     host=os.getenv("REDIS_HOST", "redis"),
     port=int(os.getenv("REDIS_PORT", 6379)),
     password=os.getenv("REDIS_PASSWORD", None),
-    decode_responses=True
+    decode_responses=True,
+    socket_connect_timeout=10,
+    socket_timeout=10,
+    retry_on_timeout=True
 )
 
 QUEUE_NAME = os.getenv("QUEUE_NAME", "jobs")
@@ -44,3 +46,11 @@ while running:
     except redis.exceptions.ConnectionError:
         print("Redis not available, retrying...")
         time.sleep(3)
+
+    except redis.exceptions.TimeoutError:
+        print("Redis timeout occurred, retrying...")
+        time.sleep(2)
+
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        time.sleep(2)

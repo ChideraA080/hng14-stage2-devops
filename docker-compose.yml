@@ -4,6 +4,7 @@ services:
     container_name: redis
     networks:
       - hng-net
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -11,7 +12,8 @@ services:
       retries: 5
 
   api:
-    build: ./api
+    build:
+      context: ./api
     container_name: api
     ports:
       - "8000:8000"
@@ -23,6 +25,7 @@ services:
         condition: service_healthy
     networks:
       - hng-net
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -30,19 +33,22 @@ services:
       retries: 5
 
   worker:
-    build: ./worker
+    build:
+      context: ./worker
     container_name: worker
     environment:
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
     depends_on:
       redis:
         condition: service_healthy
     networks:
       - hng-net
+    restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
     container_name: frontend
     ports:
       - "3000:3000"
@@ -54,6 +60,8 @@ services:
         condition: service_healthy
     networks:
       - hng-net
+    restart: unless-stopped
 
 networks:
   hng-net:
+    driver: bridge
