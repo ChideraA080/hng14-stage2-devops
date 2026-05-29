@@ -116,7 +116,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: localhost:5000/api-service:latest
-          format: sarif
+          format: table
           output: trivy-api.sarif
           severity: CRITICAL
           ignore-unfixed: true
