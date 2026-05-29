@@ -3,7 +3,7 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# safer: avoid apk upgrade (causes CI DNS failures)
+# install dependencies first (NO apk upgrade)
 RUN apk add --no-cache wget
 
 # install dependencies first
