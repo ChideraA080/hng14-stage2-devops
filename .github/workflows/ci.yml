@@ -126,8 +126,8 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: localhost:5000/worker-service:latest
-          format: sarif
-          output: trivy-worker.sarif
+          format: table
+          scanners: vuln
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: 1
