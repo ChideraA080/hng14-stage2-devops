@@ -137,7 +137,7 @@ jobs:
         with:
           image-ref: localhost:5000/frontend-service:latest
           format: table
-          scannerss: vuln
+          scanners: vuln
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: 1
