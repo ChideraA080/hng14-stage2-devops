@@ -31,7 +31,11 @@ signal.signal(signal.SIGINT, shutdown)
 def process_job(job_id):
     print(f"Processing job {job_id}")
     time.sleep(2)
-    r.hset(f"job:{job_id}", "status", "completed")
+
+    r.hset(f"job:{job_id}", mapping={
+        "status": "completed"
+    })
+
     print(f"Done: {job_id}")
 
 
@@ -48,8 +52,8 @@ while running:
         time.sleep(3)
 
     except redis.exceptions.TimeoutError:
-        print("Redis timeout occurred, retrying...")
-        time.sleep(2)
+        # normal for BRPOP timeout — NOT a failure
+        continue
 
     except Exception as e:
         print(f"Unexpected error: {e}")

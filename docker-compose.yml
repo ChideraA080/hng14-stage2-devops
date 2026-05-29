@@ -2,9 +2,9 @@ services:
   redis:
     image: redis:7
     container_name: redis
+    restart: unless-stopped
     networks:
       - hng-net
-    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -23,9 +23,9 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    restart: unless-stopped
     networks:
       - hng-net
-    restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -36,15 +36,15 @@ services:
     build:
       context: ./worker
     container_name: worker
+    restart: unless-stopped
     environment:
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       redis:
         condition: service_healthy
     networks:
       - hng-net
-    restart: unless-stopped
 
   frontend:
     build:
@@ -58,9 +58,9 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    restart: unless-stopped
     networks:
       - hng-net
-    restart: unless-stopped
 
 networks:
   hng-net:
