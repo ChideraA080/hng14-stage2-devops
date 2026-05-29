@@ -10,8 +10,7 @@ ENV PIP_RETRIES=20
 ENV PIP_TIMEOUT=600
 
 RUN python -m pip install --upgrade pip setuptools wheel
-
-RUN pip install \
+    pip install \
     --no-cache-dir \
     --default-timeout=600 \
     --retries 20 \
