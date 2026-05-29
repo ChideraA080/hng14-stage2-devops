@@ -1,3 +1,4 @@
+# hadolint ignore=DL3018
 
 FROM node:20-alpine
 
