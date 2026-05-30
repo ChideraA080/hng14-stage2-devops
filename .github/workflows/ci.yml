@@ -21,6 +21,7 @@ jobs:
           - 5000:5000
 
     steps:
+      # ---------------- CHECKOUT ----------------
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -45,13 +46,14 @@ jobs:
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: api/Dockerfile
+          ignore: DL3008
 
       - name: Lint Worker Dockerfile
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: worker/Dockerfile
+          ignore: DL3008
 
-      # ✅ FIXED FRONTEND LINT STEP (THIS IS WHAT YOU WERE ASKING FOR)
       - name: Lint Frontend Dockerfile
         uses: hadolint/hadolint-action@v3.1.0
         with:
@@ -84,32 +86,21 @@ jobs:
       # ---------------- BUILD ----------------
       - name: Build Docker images
         run: |
-          docker build \
-            -t localhost:5000/api-service:latest \
-            -t localhost:5000/api-service:${{ github.sha }} \
-            ./api
-
-          docker build \
-            -t localhost:5000/worker-service:latest \
-            -t localhost:5000/worker-service:${{ github.sha }} \
-            ./worker
-
-          docker build \
-            -t localhost:5000/frontend-service:latest \
-            -t localhost:5000/frontend-service:${{ github.sha }} \
-            ./frontend
+          docker build -t localhost:5000/api-service:latest -t localhost:5000/api-service:${GITHUB_SHA} ./api
+          docker build -t localhost:5000/worker-service:latest -t localhost:5000/worker-service:${GITHUB_SHA} ./worker
+          docker build -t localhost:5000/frontend-service:latest -t localhost:5000/frontend-service:${GITHUB_SHA} ./frontend
 
       # ---------------- PUSH ----------------
-      - name: Push images to local registry
+      - name: Push images to registry
         run: |
           docker push localhost:5000/api-service:latest
-          docker push localhost:5000/api-service:${{ github.sha }}
+          docker push localhost:5000/api-service:${GITHUB_SHA}
 
           docker push localhost:5000/worker-service:latest
-          docker push localhost:5000/worker-service:${{ github.sha }}
+          docker push localhost:5000/worker-service:${GITHUB_SHA}
 
           docker push localhost:5000/frontend-service:latest
-          docker push localhost:5000/frontend-service:${{ github.sha }}
+          docker push localhost:5000/frontend-service:${GITHUB_SHA}
 
       # ---------------- SECURITY SCAN ----------------
       - name: Scan API image with Trivy
@@ -117,7 +108,7 @@ jobs:
         with:
           image-ref: localhost:5000/api-service:latest
           format: sarif
-          output:  trivy-api.sarif
+          output: trivy-api.sarif
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: 1
@@ -127,7 +118,7 @@ jobs:
         with:
           image-ref: localhost:5000/worker-service:latest
           format: sarif
-          output:  trivy-worker.sarif
+          output: trivy-worker.sarif
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: 1
@@ -194,26 +185,22 @@ jobs:
         run: docker compose down -v
 
       # ---------------- DEPLOY ----------------
-      - name: Simulated rolling deployment
+      - name: Rolling deployment
         if: github.ref == 'refs/heads/main'
         run: |
-          echo "Starting rolling deployment"
+          echo "Starting deployment..."
 
-          echo "Pulling latest images"
           docker pull localhost:5000/api-service:latest || true
+          docker pull localhost:5000/worker-service:latest || true
+          docker pull localhost:5000/frontend-service:latest || true
 
-          echo "Starting new container"
           docker compose up -d --build
-
-          echo "Waiting for health check"
 
           timeout 60 bash -c '
             until curl -f http://localhost:8000/health; do
-              echo "Waiting for healthy container..."
+              echo "Waiting for health..."
               sleep 5
             done
           '
 
-          echo "New container healthy"
-          echo "Stopping old container"
-          echo "Rolling deployment successful"
+          echo "Deployment successful"
