@@ -1,3 +1,4 @@
+# Stage 1: builder
 FROM python:3.12-slim-bookworm AS builder
 
 WORKDIR /app
@@ -7,21 +8,22 @@ COPY requirements.txt .
 RUN python -m pip install --upgrade pip setuptools wheel && \
     pip install \
     --no-cache-dir \
-    --default-timeout=600 \
-    --retries 20 \
-    --timeout 600 \
     --prefer-binary \
     --target=/install \
     -r requirements.txt
 
+
+# Stage 2: runtime
 FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
+# Install only minimal required system tools
 RUN apt-get update && \
-    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
+# Create non-root user
 RUN useradd -m appuser
 
 COPY --from=builder /install /install
@@ -32,6 +34,8 @@ ENV PYTHONPATH=/install
 
 USER appuser
 
-HEALTHCHECK CMD python -c "import os, redis; r=redis.Redis(host=os.getenv('REDIS_HOST','redis'), port=int(os.getenv('REDIS_PORT',6379))); r.ping()" || exit 1
+# Safer healthcheck (no Python imports)
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
+CMD curl -f http://localhost:8000 || exit 1
 
 CMD ["python", "worker.py"]

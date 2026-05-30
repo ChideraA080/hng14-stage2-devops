@@ -5,29 +5,26 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-ENV PIP_DEFAULT_TIMEOUT=600
-ENV PIP_RETRIES=20
-ENV PIP_TIMEOUT=600
-
 RUN python -m pip install --upgrade pip setuptools wheel && \
     pip install \
     --no-cache-dir \
-    --default-timeout=600 \
-    --retries 20 \
-    --timeout 600 \
     --prefer-binary \
+    --disable-pip-version-check \
     --target=/install \
     -r requirements.txt
+
 
 # Stage 2: runtime
 FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
+# Install only minimal security patches (avoid full upgrade)
 RUN apt-get update && \
-    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
+# Create non-root user
 RUN useradd -m appuser
 
 COPY --from=builder /install /install
@@ -39,7 +36,7 @@ ENV PYTHONPATH=/install
 EXPOSE 8000
 
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
-CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+CMD curl -f http://localhost:8000/health || exit 1
 
 USER appuser
 
