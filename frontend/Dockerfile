@@ -1,28 +1,33 @@
-FROM node:20-alpine3.21
+FROM node:20-bookworm-slim
 
 WORKDIR /app
 
-# Install only required OS tools (NO upgrade)
-RUN apk add --no-cache wget curl
+# Install required OS tools
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl wget && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files first
 COPY package*.json ./
 
-# Install dependencies (production only)
+# Install dependencies
 RUN npm ci --omit=dev
 
 # Copy application source
 COPY . .
 
 # Create non-root user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+
+# Fix permissions for node app
+RUN chown -R appuser:appgroup /app
 
 USER appuser
 
 EXPOSE 3000
 
-# Safer healthcheck (more stable in CI)
+# Safer healthcheck
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
-CMD curl -f http://localhost:3000/health || exit 1
+CMD curl -f http://localhost:3000 || exit 1
 
 CMD ["node", "app.js"]
