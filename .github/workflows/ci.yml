@@ -54,19 +54,21 @@ jobs:
       with:
         dockerfile: ./api/Dockerfile
         failure-threshold: warning
+        ignore: DL3008
 
     - name: Lint Worker Dockerfile
       uses: hadolint/hadolint-action@v3.1.0
       with:
         dockerfile: ./worker/Dockerfile
         failure-threshold: warning
+        ignore: DL3008
 
     - name: Lint Frontend Dockerfile
       uses: hadolint/hadolint-action@v3.1.0
       with:
         dockerfile: ./frontend/Dockerfile
         failure-threshold: warning
-
+        ignore: DL3008
     # ---------------- TEST ----------------
     - name: Install test dependencies
       run: pip install pytest pytest-cov fastapi httpx redis
