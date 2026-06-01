@@ -5,6 +5,10 @@ on:
     branches: ["main"]
   pull_request:
 
+env:
+  REGISTRY: localhost:5000
+  IMAGE_TAG: ${{ github.sha }}
+
 jobs:
   pipeline:
     runs-on: ubuntu-latest
@@ -21,186 +25,140 @@ jobs:
           - 5000:5000
 
     steps:
-      # ---------------- CHECKOUT ----------------
-      - name: Checkout code
-        uses: actions/checkout@v4
 
-      # ---------------- LINT ----------------
-      - name: Install Python dependencies (lint)
-        run: pip install flake8
+    # ---------------- CHECKOUT ----------------
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Lint Python code
-        run: flake8 api worker
+    # ---------------- LINT ----------------
+    - name: Install Python lint tools
+      run: pip install flake8
 
-      - name: Install Node dependencies
-        run: |
-          cd frontend
-          npm install
+    - name: Lint Python
+      run: flake8 api worker
 
-      - name: Lint JavaScript
-        run: |
-          cd frontend
-          npx eslint .
+    - name: Install Node dependencies
+      run: |
+        cd frontend
+        npm install
 
-      - name: Lint API Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: api/Dockerfile
-          ignore: DL3008
+    - name: Lint JS
+      run: |
+        cd frontend
+        npx eslint .
 
-      - name: Lint Worker Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: worker/Dockerfile
-          ignore: DL3008
+    - name: Lint Dockerfiles
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: |
+          api/Dockerfile
+          worker/Dockerfile
+          frontend/Dockerfile
 
-      - name: Lint Frontend Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: frontend/Dockerfile
-          ignore: DL3008
+    # ---------------- TEST ----------------
+    - name: Install test dependencies
+      run: pip install pytest pytest-cov fastapi httpx redis
 
-      # ---------------- TEST ----------------
-      - name: Install test dependencies
-        run: |
-          pip install pytest pytest-cov fastapi httpx redis
+    - name: Run API tests
+      run: |
+        pytest api \
+          --maxfail=1 \
+          --disable-warnings \
+          --cov=api \
+          --cov-report=xml
 
-      - name: Run API tests with coverage
-        env:
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-        run: |
-          pytest api \
-            --maxfail=1 \
-            --disable-warnings \
-            --cov=api \
-            --cov-report=xml \
-            --cov-report=term
+    - name: Upload coverage
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage.xml
 
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.xml
+    # ---------------- BUILD ----------------
+    - name: Build images (SHA + latest)
+      run: |
+        docker build -t $REGISTRY/api-service:latest -t $REGISTRY/api-service:$IMAGE_TAG ./api
+        docker build -t $REGISTRY/worker-service:latest -t $REGISTRY/worker-service:$IMAGE_TAG ./worker
+        docker build -t $REGISTRY/frontend-service:latest -t $REGISTRY/frontend-service:$IMAGE_TAG ./frontend
 
-      # ---------------- BUILD ----------------
-      - name: Build Docker images
-        run: |
-          docker build -t localhost:5000/api-service:latest -t localhost:5000/api-service:${GITHUB_SHA} ./api
-          docker build -t localhost:5000/worker-service:latest -t localhost:5000/worker-service:${GITHUB_SHA} ./worker
-          docker build -t localhost:5000/frontend-service:latest -t localhost:5000/frontend-service:${GITHUB_SHA} ./frontend
+    # ---------------- PUSH ----------------
+    - name: Push images
+      run: |
+        docker push $REGISTRY/api-service:latest
+        docker push $REGISTRY/api-service:$IMAGE_TAG
 
-      # ---------------- PUSH ----------------
-      - name: Push images to registry
-        run: |
-          docker push localhost:5000/api-service:latest
-          docker push localhost:5000/api-service:${GITHUB_SHA}
+        docker push $REGISTRY/worker-service:latest
+        docker push $REGISTRY/worker-service:$IMAGE_TAG
 
-          docker push localhost:5000/worker-service:latest
-          docker push localhost:5000/worker-service:${GITHUB_SHA}
+        docker push $REGISTRY/frontend-service:latest
+        docker push $REGISTRY/frontend-service:$IMAGE_TAG
 
-          docker push localhost:5000/frontend-service:latest
-          docker push localhost:5000/frontend-service:${GITHUB_SHA}
+    # ---------------- SECURITY SCAN (FIXED) ----------------
+    - name: Run Trivy scan (single optimized step)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/api-service:latest
+        format: sarif
+        output: trivy.sarif
+        severity: CRITICAL
+        ignore-unfixed: true
+        exit-code: 1
 
-      # ---------------- SECURITY SCAN ----------------
-      - name: Scan API image with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: localhost:5000/api-service:latest
-          format: sarif
-          output: trivy-api.sarif
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: 1
+    - name: Upload Trivy report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: trivy-report
+        path: trivy.sarif
 
-      - name: Scan Worker image with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: localhost:5000/worker-service:latest
-          format: sarif
-          output: trivy-worker.sarif
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: 1
+    # ---------------- INTEGRATION TEST (FIXED) ----------------
+    - name: Start stack
+      run: docker compose up -d --build
 
-      - name: Scan Frontend image with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: localhost:5000/frontend-service:latest
-          format: sarif
-          output: trivy-frontend.sarif
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: 1
+    - name: Wait for API health (robust)
+      run: |
+        for i in {1..30}; do
+          curl -f http://localhost:8000/health && exit 0
+          echo "waiting..."
+          sleep 3
+        done
+        exit 1
 
-      - name: Upload Trivy SARIF reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-sarif-reports
-          path: |
-            trivy-api.sarif
-            trivy-worker.sarif
-            trivy-frontend.sarif
+    - name: Run integration test
+      run: |
+        JOB=$(curl -s -X POST http://localhost:8000/jobs)
+        JOB_ID=$(echo $JOB | python3 -c "import sys,json; print(json.load(sys.stdin)['job_id'])")
 
-      # ---------------- INTEGRATION TEST ----------------
-      - name: Start stack
-        run: docker compose up -d --build
+        for i in {1..20}; do
+          STATUS=$(curl -s http://localhost:8000/jobs/$JOB_ID | python3 -c "import sys,json; print(json.load(sys.stdin).get('status'))")
 
-      - name: Wait for services
-        run: sleep 30
+          if [ "$STATUS" = "completed" ]; then
+            echo "SUCCESS"
+            exit 0
+          fi
 
-      - name: Verify API health
-        run: curl --fail http://localhost:8000/health
+          sleep 3
+        done
 
-      - name: Submit job and wait for completion
-        run: |
-          JOB_RESPONSE=$(curl -s -X POST http://localhost:8000/jobs)
+        exit 1
 
-          echo "Job response:"
-          echo $JOB_RESPONSE
+    - name: Tear down stack
+      if: always()
+      run: docker compose down -v
 
-          JOB_ID=$(echo $JOB_RESPONSE | python3 -c "import sys, json; print(json.load(sys.stdin)['job_id'])")
+    # ---------------- DEPLOY (FIXED) ----------------
+    - name: Deploy (main only)
+      if: github.ref == 'refs/heads/main'
+      run: |
+        echo "Deploying version: $IMAGE_TAG"
 
-          echo "Job ID: $JOB_ID"
+        docker compose down
+        IMAGE_TAG=$IMAGE_TAG docker compose up -d
 
-          for i in {1..20}; do
-            STATUS=$(curl -s http://localhost:8000/jobs/$JOB_ID | python3 -c "import sys, json; print(json.load(sys.stdin).get('status'))")
-
-            echo "Attempt $i: status=$STATUS"
-
-            if [ "$STATUS" = "completed" ]; then
-              echo "Integration test passed"
-              exit 0
-            fi
-
-            sleep 3
+        timeout 60 bash -c '
+          until curl -f http://localhost:8000/health; do
+            echo "waiting..."
+            sleep 5
           done
+        '
 
-          echo "Integration test failed"
-          exit 1
-
-      - name: Tear down stack
-        if: always()
-        run: docker compose down -v
-
-      # ---------------- DEPLOY ----------------
-      - name: Rolling deployment
-        if: github.ref == 'refs/heads/main'
-        run: |
-          echo "Starting deployment..."
-
-          docker pull localhost:5000/api-service:latest || true
-          docker pull localhost:5000/worker-service:latest || true
-          docker pull localhost:5000/frontend-service:latest || true
-
-          docker compose up -d --build
-
-          timeout 60 bash -c '
-            until curl -f http://localhost:8000/health; do
-              echo "Waiting for health..."
-              sleep 5
-            done
-          '
-
-          echo "Deployment successful"
+        echo "Deployment successful"
