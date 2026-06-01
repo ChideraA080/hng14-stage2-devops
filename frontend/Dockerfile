@@ -2,9 +2,10 @@ FROM node:20-bookworm-slim
 
 WORKDIR /app
 
-# Install required OS tools
+# Install required OS tools (FIX: added curl)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates && \
+    apt-get install -y --no-install-recommends \
+    ca-certificates curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files first
@@ -26,7 +27,7 @@ USER appuser
 
 EXPOSE 3000
 
-# Safer healthcheck
+# Healthcheck (now curl exists)
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
 CMD curl -f http://localhost:3000 || exit 1
 

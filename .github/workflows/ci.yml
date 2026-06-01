@@ -48,30 +48,33 @@ jobs:
         cd frontend
         npx eslint .
 
-    # ---------------- HADOLINT (FIXED) ----------------
+    # ---------------- HADOLINT ----------------
     - name: Lint API Dockerfile
       uses: hadolint/hadolint-action@v3.1.0
       with:
-        dockerfile: api/Dockerfile
-        ignore: DL3008
+        dockerfile: ./api/Dockerfile
+        failure-threshold: warning
 
     - name: Lint Worker Dockerfile
       uses: hadolint/hadolint-action@v3.1.0
       with:
-        dockerfile: worker/Dockerfile
-        ignore: DL3008
+        dockerfile: ./worker/Dockerfile
+        failure-threshold: warning
 
     - name: Lint Frontend Dockerfile
       uses: hadolint/hadolint-action@v3.1.0
       with:
-        dockerfile: frontend/Dockerfile
-        ignore: DL3008
+        dockerfile: ./frontend/Dockerfile
+        failure-threshold: warning
 
     # ---------------- TEST ----------------
     - name: Install test dependencies
       run: pip install pytest pytest-cov fastapi httpx redis
 
     - name: Run API tests
+      env:
+        REDIS_HOST: localhost
+        REDIS_PORT: 6379
       run: |
         pytest api \
           --maxfail=1 \
@@ -85,15 +88,17 @@ jobs:
         name: coverage-report
         path: coverage.xml
 
-    # ---------------- BUILD ----------------
+    # ---------------- BUILD (LATEST + SHA) ----------------
     - name: Build Docker images
       run: |
+        echo "Building images with latest + SHA"
+
         docker build -t $REGISTRY/api-service:latest -t $REGISTRY/api-service:$IMAGE_TAG ./api
         docker build -t $REGISTRY/worker-service:latest -t $REGISTRY/worker-service:$IMAGE_TAG ./worker
         docker build -t $REGISTRY/frontend-service:latest -t $REGISTRY/frontend-service:$IMAGE_TAG ./frontend
 
     # ---------------- PUSH ----------------
-    - name: Push images
+    - name: Push Docker images
       run: |
         docker push $REGISTRY/api-service:latest
         docker push $REGISTRY/api-service:$IMAGE_TAG
@@ -104,25 +109,50 @@ jobs:
         docker push $REGISTRY/frontend-service:latest
         docker push $REGISTRY/frontend-service:$IMAGE_TAG
 
-    # ---------------- SECURITY SCAN (FIXED) ----------------
-    - name: Trivy scan (API only to avoid timeout)
+    # ---------------- SECURITY SCAN (STAGE 2 COMPLIANT) ----------------
+
+    - name: Trivy scan API
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: ${{ env.REGISTRY }}/api-service:latest
         format: sarif
-        output: trivy.sarif
+        output: trivy-api.sarif
         severity: CRITICAL
         ignore-unfixed: true
-        exit-code: 1
-        timeout: 10m
         scanners: vuln
+        exit-code: 1
 
-    - name: Upload Trivy report
+    - name: Trivy scan Worker
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/worker-service:latest
+        format: sarif
+        output: trivy-worker.sarif
+        severity: CRITICAL
+        ignore-unfixed: true
+        scanners: vuln
+        exit-code: 1
+
+    - name: Trivy scan Frontend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/frontend-service:latest
+        format: sarif
+        output: trivy-frontend.sarif
+        severity: CRITICAL
+        ignore-unfixed: true
+        scanners: vuln
+        exit-code: 1
+
+    - name: Upload Trivy SARIF reports
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: trivy-report
-        path: trivy.sarif
+        name: trivy-sarif-reports
+        path: |
+          trivy-api.sarif
+          trivy-worker.sarif
+          trivy-frontend.sarif
 
     # ---------------- INTEGRATION TEST ----------------
     - name: Start stack
@@ -140,10 +170,13 @@ jobs:
     - name: Integration test
       run: |
         JOB=$(curl -s -X POST http://localhost:8000/jobs)
+
         JOB_ID=$(echo $JOB | python3 -c "import sys,json; print(json.load(sys.stdin)['job_id'])")
 
         for i in {1..20}; do
           STATUS=$(curl -s http://localhost:8000/jobs/$JOB_ID | python3 -c "import sys,json; print(json.load(sys.stdin).get('status'))")
+
+          echo "status=$STATUS"
 
           if [ "$STATUS" = "completed" ]; then
             echo "SUCCESS"
