@@ -26,7 +26,8 @@ WORKDIR /app
 
 # Install minimal OS dependencies
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl gcc && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
