@@ -4,8 +4,7 @@ WORKDIR /app
 
 # Install required OS tools
 RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends wget curl && \
+    apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files first
