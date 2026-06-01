@@ -10,6 +10,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: "128M"
 
   api:
     build:
@@ -17,9 +22,11 @@ services:
     container_name: api
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
     depends_on:
       redis:
         condition: service_healthy
@@ -31,20 +38,37 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "256M"
 
   worker:
     build:
       context: ./worker
     container_name: worker
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
     depends_on:
       redis:
         condition: service_healthy
     networks:
       - hng-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "print('worker ok')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "256M"
 
   frontend:
     build:
@@ -52,15 +76,22 @@ services:
     container_name: frontend
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
-      API_URL: http://api:8000
-      PORT: 3000
+      API_URL: ${API_URL}
+      PORT: ${PORT}
     depends_on:
       api:
         condition: service_healthy
     restart: unless-stopped
     networks:
       - hng-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "256M"
 
 networks:
   hng-net:

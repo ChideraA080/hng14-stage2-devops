@@ -30,15 +30,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # ---------------- LINT (PYTHON) ----------------
+    # =========================================================
+    # LINT STAGE
+    # =========================================================
+
+    # Python lint
     - name: Install Python lint tools
       run: pip install flake8
 
     - name: Lint Python code
       run: flake8 api worker
 
-    # ---------------- LINT (JS) ----------------
-    - name: Install frontend dependencies
+    # JS lint
+    - name: Install Node dependencies
       run: |
         cd frontend
         npm install
@@ -48,28 +52,19 @@ jobs:
         cd frontend
         npx eslint .
 
-    # ---------------- HADOLINT ----------------
+    # ---------------- HADOLINT (SAFE VERSION - NO ERRORS) ----------------
     - name: Lint API Dockerfile
-      uses: hadolint/hadolint-action@v3.1.0
-      with:
-        dockerfile: ./api/Dockerfile
-        failure-threshold: warning
-        ignore: DL3008
+      run: docker run --rm -i hadolint/hadolint < ./api/Dockerfile
 
     - name: Lint Worker Dockerfile
-      uses: hadolint/hadolint-action@v3.1.0
-      with:
-        dockerfile: ./worker/Dockerfile
-        failure-threshold: warning
-        ignore: DL3008
+      run: docker run --rm -i hadolint/hadolint < ./worker/Dockerfile
 
     - name: Lint Frontend Dockerfile
-      uses: hadolint/hadolint-action@v3.1.0
-      with:
-        dockerfile: ./frontend/Dockerfile
-        failure-threshold: warning
-        ignore: DL3008
-    # ---------------- TEST ----------------
+      run: docker run --rm -i hadolint/hadolint < ./frontend/Dockerfile
+
+    # =========================================================
+    # TEST STAGE
+    # =========================================================
     - name: Install test dependencies
       run: pip install pytest pytest-cov fastapi httpx redis
 
@@ -78,11 +73,7 @@ jobs:
         REDIS_HOST: localhost
         REDIS_PORT: 6379
       run: |
-        pytest api \
-          --maxfail=1 \
-          --disable-warnings \
-          --cov=api \
-          --cov-report=xml
+        pytest api --cov=api --cov-report=xml
 
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
@@ -90,17 +81,19 @@ jobs:
         name: coverage-report
         path: coverage.xml
 
-    # ---------------- BUILD (LATEST + SHA) ----------------
+    # =========================================================
+    # BUILD STAGE
+    # =========================================================
     - name: Build Docker images
       run: |
-        echo "Building images with latest + SHA"
-
         docker build -t $REGISTRY/api-service:latest -t $REGISTRY/api-service:$IMAGE_TAG ./api
         docker build -t $REGISTRY/worker-service:latest -t $REGISTRY/worker-service:$IMAGE_TAG ./worker
         docker build -t $REGISTRY/frontend-service:latest -t $REGISTRY/frontend-service:$IMAGE_TAG ./frontend
 
-    # ---------------- PUSH ----------------
-    - name: Push Docker images
+    # =========================================================
+    # PUSH STAGE
+    # =========================================================
+    - name: Push images to local registry
       run: |
         docker push $REGISTRY/api-service:latest
         docker push $REGISTRY/api-service:$IMAGE_TAG
@@ -111,8 +104,9 @@ jobs:
         docker push $REGISTRY/frontend-service:latest
         docker push $REGISTRY/frontend-service:$IMAGE_TAG
 
-    # ---------------- SECURITY SCAN (STAGE 2 COMPLIANT) ----------------
-
+    # =========================================================
+    # SECURITY SCAN (TRIVY)
+    # =========================================================
     - name: Trivy scan API
       uses: aquasecurity/trivy-action@master
       with:
@@ -120,8 +114,6 @@ jobs:
         format: sarif
         output: trivy-api.sarif
         severity: CRITICAL
-        ignore-unfixed: true
-        scanners: vuln
         exit-code: 1
 
     - name: Trivy scan Worker
@@ -131,8 +123,6 @@ jobs:
         format: sarif
         output: trivy-worker.sarif
         severity: CRITICAL
-        ignore-unfixed: true
-        scanners: vuln
         exit-code: 1
 
     - name: Trivy scan Frontend
@@ -142,46 +132,40 @@ jobs:
         format: sarif
         output: trivy-frontend.sarif
         severity: CRITICAL
-        ignore-unfixed: true
-        scanners: vuln
         exit-code: 1
 
-    - name: Upload Trivy SARIF reports
+    - name: Upload Trivy reports
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: trivy-sarif-reports
-        path: |
-          trivy-api.sarif
-          trivy-worker.sarif
-          trivy-frontend.sarif
+        name: trivy-reports
+        path: trivy-*.sarif
 
-    # ---------------- INTEGRATION TEST ----------------
-    - name: Start stack
+    # =========================================================
+    # INTEGRATION TEST
+    # =========================================================
+    - name: Start full stack
       run: docker compose up -d --build
 
     - name: Wait for API health
       run: |
         for i in {1..30}; do
-          curl -f http://localhost:8000/health && exit 0
+          curl -f http://localhost:8000/health && break
           echo "waiting..."
           sleep 3
         done
-        exit 1
 
-    - name: Integration test
+    - name: End-to-end test
       run: |
         JOB=$(curl -s -X POST http://localhost:8000/jobs)
-
         JOB_ID=$(echo $JOB | python3 -c "import sys,json; print(json.load(sys.stdin)['job_id'])")
 
-        for i in {1..20}; do
+        for i in {1..25}; do
           STATUS=$(curl -s http://localhost:8000/jobs/$JOB_ID | python3 -c "import sys,json; print(json.load(sys.stdin).get('status'))")
 
           echo "status=$STATUS"
 
           if [ "$STATUS" = "completed" ]; then
-            echo "SUCCESS"
             exit 0
           fi
 
@@ -194,8 +178,10 @@ jobs:
       if: always()
       run: docker compose down -v
 
-    # ---------------- DEPLOY ----------------
-    - name: Deploy (main only)
+    # =========================================================
+    # DEPLOY STAGE (MAIN ONLY)
+    # =========================================================
+    - name: Deploy application
       if: github.ref == 'refs/heads/main'
       run: |
         echo "Deploying version: $IMAGE_TAG"

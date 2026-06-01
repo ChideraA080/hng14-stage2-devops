@@ -1,41 +1,29 @@
-# Stage 1: builder
+# Builder stage
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
 COPY requirements.txt .
 
-# Install dependencies normally (IMPORTANT FIX)
-ENV PIP_DEFAULT_TIMEOUT=300
-ENV PIP_RETRIES=20
-
-RUN python -m pip install --upgrade pip setuptools wheel && \
-    pip install \
-    --no-cache-dir \
-    --prefer-binary \
-    --disable-pip-version-check \
-    --timeout 300 \
-    --retries 20 \
-    -r requirements.txt
+RUN python -m pip install --upgrade pip && \
+    pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
-# Stage 2: runtime
+# Runtime stage
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install minimal OS dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates && \
+# ONLY essential security update
+RUN apt-get update && apt-get upgrade -y && \
     rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
+# Non-root user
 RUN useradd -m appuser
 
-# Copy installed packages from builder
-COPY --from=builder /usr/local /usr/local
+# Copy only installed deps (NOT full /usr/local)
+COPY --from=builder /install /usr/local
 
-# Copy app source
 COPY . .
 
 ENV PATH=/usr/local/bin:$PATH
