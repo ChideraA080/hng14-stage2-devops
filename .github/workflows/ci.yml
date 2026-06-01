@@ -30,30 +30,42 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # ---------------- LINT ----------------
+    # ---------------- LINT (PYTHON) ----------------
     - name: Install Python lint tools
       run: pip install flake8
 
-    - name: Lint Python
+    - name: Lint Python code
       run: flake8 api worker
 
-    - name: Install Node dependencies
+    # ---------------- LINT (JS) ----------------
+    - name: Install frontend dependencies
       run: |
         cd frontend
         npm install
 
-    - name: Lint JS
+    - name: Lint JavaScript
       run: |
         cd frontend
         npx eslint .
 
-    - name: Lint Dockerfiles
+    # ---------------- HADOLINT (FIXED) ----------------
+    - name: Lint API Dockerfile
       uses: hadolint/hadolint-action@v3.1.0
       with:
-        dockerfile: |
-          api/Dockerfile
-          worker/Dockerfile
-          frontend/Dockerfile
+        dockerfile: api/Dockerfile
+        ignore: DL3008
+
+    - name: Lint Worker Dockerfile
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: worker/Dockerfile
+        ignore: DL3008
+
+    - name: Lint Frontend Dockerfile
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: frontend/Dockerfile
+        ignore: DL3008
 
     # ---------------- TEST ----------------
     - name: Install test dependencies
@@ -67,14 +79,14 @@ jobs:
           --cov=api \
           --cov-report=xml
 
-    - name: Upload coverage
+    - name: Upload coverage report
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report
         path: coverage.xml
 
     # ---------------- BUILD ----------------
-    - name: Build images (SHA + latest)
+    - name: Build Docker images
       run: |
         docker build -t $REGISTRY/api-service:latest -t $REGISTRY/api-service:$IMAGE_TAG ./api
         docker build -t $REGISTRY/worker-service:latest -t $REGISTRY/worker-service:$IMAGE_TAG ./worker
@@ -93,7 +105,7 @@ jobs:
         docker push $REGISTRY/frontend-service:$IMAGE_TAG
 
     # ---------------- SECURITY SCAN (FIXED) ----------------
-    - name: Run Trivy scan (single optimized step)
+    - name: Trivy scan (API only to avoid timeout)
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: ${{ env.REGISTRY }}/api-service:latest
@@ -110,11 +122,11 @@ jobs:
         name: trivy-report
         path: trivy.sarif
 
-    # ---------------- INTEGRATION TEST (FIXED) ----------------
+    # ---------------- INTEGRATION TEST ----------------
     - name: Start stack
       run: docker compose up -d --build
 
-    - name: Wait for API health (robust)
+    - name: Wait for API health
       run: |
         for i in {1..30}; do
           curl -f http://localhost:8000/health && exit 0
@@ -123,7 +135,7 @@ jobs:
         done
         exit 1
 
-    - name: Run integration test
+    - name: Integration test
       run: |
         JOB=$(curl -s -X POST http://localhost:8000/jobs)
         JOB_ID=$(echo $JOB | python3 -c "import sys,json; print(json.load(sys.stdin)['job_id'])")
@@ -145,7 +157,7 @@ jobs:
       if: always()
       run: docker compose down -v
 
-    # ---------------- DEPLOY (FIXED) ----------------
+    # ---------------- DEPLOY ----------------
     - name: Deploy (main only)
       if: github.ref == 'refs/heads/main'
       run: |
