@@ -4,6 +4,7 @@ from api.main import app
 
 client = TestClient(app)
 
+
 def test_create_job():
     with patch("api.main.r") as mock_redis:
         mock_redis.lpush.return_value = 1
@@ -14,7 +15,6 @@ def test_create_job():
         assert "job_id" in response.json()
 
 
-
 def test_get_job_status():
     with patch("api.main.r") as mock_redis:
         mock_redis.get.return_value = b"completed"
@@ -22,7 +22,6 @@ def test_get_job_status():
         response = client.get("/jobs/test-id")
 
         assert response.status_code == 200
-
 
 
 def test_invalid_job():
