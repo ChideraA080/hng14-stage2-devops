@@ -150,6 +150,8 @@ Expected response:
 ```
 {"status": "ok"}
 ```
+Confirmation
+![ Architecture Diagram](https://github.com/ChideraA080/hng-stage1/blob/main/Hng%20_Stage1%20Screenshots/Stage1%20Architceture%20Diagram.png)
 End-to-End Job Flow Test
 
 Create Job
