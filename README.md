@@ -9,41 +9,52 @@ It demonstrates a complete event-driven job processing system using Redis as a m
 
 The system is fully containerized and orchestrated using Docker Compose, with automated testing, security scanning, and deployment simulation using GitHub Actions.
 
-It consists of three services:
+
+It consists of four components::
 
 - **Frontend (Node.js)** - Submits and tracks jobs
 - **API (FastAPI / Python)** - Creates and manages job status
 - **Worker (Python)** - Processes jobs from Redis queue
 - **Redis** - Shared in-memory message broker
 
-The entire system is fully containerized using Docker and orchestrated with Docker Compose, with a complete CI/CD pipeline using GitHub Actions.
-
----
-
+  
 ## Architecture
 
-The system follows an asynchronous queue-based architecture:
+The system follows an asynchronous event-driven architecture:
 
-Frontend → API → Redis Queue → Worker → Redis (status update)
+Frontend → API → Redis Queue → Worker → Redis → API → Frontend
 
-Flow:
-- Frontend submits job request
-- API generates a job ID and pushes it to Redis queue
-- Worker consumes jobs from Redis
-- Worker processes job and updates status
-- API exposes job status via REST endpoint
+### Flow
 
-Service        Description                          
-  
-- Frontend  →  Node.js app for job submission      
+1. User submits a job via the Frontend
+2. API generates a job ID and pushes it to Redis queue
+3. Worker consumes jobs from Redis
+4. Worker processes the job and updates status in Redis
+5. API exposes job status via REST endpoints
+6. Frontend polls API for updates
 
-- API       →  FastAPI service for job management   
+## Services
 
-- Worker    →  Python worker processing Redis queue 
+### Frontend (Node.js)
+- Submits and tracks jobs
+- Communicates with API
 
-- Redis     →  In-memory message broker             
+### API (FastAPI / Python)
+- Creates jobs
+- Manages job status
+- Exposes REST endpoints
 
+### Worker (Python)
+- Processes jobs from Redis queue
+- Updates job status
 
+### Redis
+- In-memory message broker
+- Shared between API and Worker
+- Not exposed externally
+
+The entire system is fully containerized using Docker and orchestrated with Docker Compose, with a complete CI/CD pipeline using GitHub Actions.
+       
 
 Services communicate over a private Docker network:
 
@@ -52,8 +63,6 @@ Services communicate over a private Docker network:
 - API exposes job status to frontend
 
 Redis is NOT exposed externally for security reasons.
-
----
 
 ## Tech Stack
 
@@ -66,8 +75,6 @@ Redis is NOT exposed externally for security reasons.
 - Hadolint (Docker linting)
 - Pytest (Unit testing)
 
----
-
 ## Prerequisites
 
 Before running locally:
@@ -76,7 +83,13 @@ Before running locally:
 - Docker Compose installed
 - Git installed
 
----
+  Verify:
+
+```bash
+docker --version
+docker compose version
+git --version
+```
 
 ## How to Run Locally
 
@@ -91,7 +104,7 @@ cd hng14-stage2-devops
 ```
 cp .env.example .env
 ```
-Update values if needed:
+Required Environment Variables:
 ```
 REDIS_HOST=redis
 REDIS_PORT=6379
@@ -103,7 +116,25 @@ PORT=3000
 ```
 docker compose up --build
 ```
-Accessing the Application
+Expected Startup Output
+
+redis    | Ready to accept connections
+api      | Application startup complete
+worker   | Worker started successfully
+frontend | Server running on port 3000
+
+Verify Running ContainersAccessing the Application
+
+```
+docker ps
+```
+Expected:
+
+api → Up (healthy)
+worker → Up (healthy)
+frontend → Up (healthy)
+redis → Up (healthy)
+
 ```
 | Service    | URL                                                          |
 | ---------- | ------------------------------------------------------------ |
@@ -119,6 +150,30 @@ Expected response:
 ```
 {"status": "ok"}
 ```
+End-to-End Job Flow Test
+
+Create Job
+```
+curl -X POST http://localhost:8000/jobs
+```
+Expected:
+```
+{
+  "job_id": "uuid"
+}
+```
+Check Job Status
+```
+curl http://localhost:8000/jobs/<job_id>
+```
+Expected:
+```
+{
+  "job_id": "uuid",
+  "status": "completed"
+}
+```
+
 ## Running Tests
 
 Inside API container:
@@ -152,35 +207,38 @@ Pipeline Stages
 4. Security Scan
 - Trivy scans all images
 - Fails pipeline on CRITICAL vulnerabilities
-- Uploads SARIF report
+- SARIF reports uploaded as artifacts
 
 5. Integration Tests
 
 - Spins up full stack in CI
-- Submits job via frontend
-- Verifies job processing via API
-- Tears down environment safely
+- Submits job via API
+- Polls job completion
+- Validates result
+- Tears down environment 
 
 6. Deploy (Main branch only)
 
 - Rolling deployment strategy
 - New container must pass health checks
-- If health check fails → rollback
-- Docker Features
+- If health check fails within 60 seconds → rollback
+
+6. Docker Standards Implemented
 
 Each service includes:
 - Multi-stage builds
-- Non-root user execution
-- HEALTHCHECK instruction
-- Environment variable configuration
+- Non-root users in all containers
+- Health checks included
+- Environment-based configuration
 - No secrets inside images
+- Internal Docker networking
 
 ### Security Considerations
 
-- Redis is not exposed publicly
+- Redis not exposed externally
 - Containers run as non-root users
-- No hardcoded secrets or credentials
-- Vulnerability scanning enforced in CI
+- Vulnerability scanning enforced in CI pipeline
+- No hardcoded secrets
 
 ### Known Design Decisions
 - Redis is used as a lightweight queue system
@@ -204,9 +262,9 @@ Each entry includes:
 
 ## Project Status
 
-- All services containerized
+- Fully containerized microservices
 
-- Full CI/CD pipeline implemented
+- Fully CI/CD pipeline implemented
 
 - Security scanning enabled
 
