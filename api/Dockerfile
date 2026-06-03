@@ -26,6 +26,8 @@ COPY --from=builder /install /usr/local
 
 COPY . .
 
+RUN chown -R appuser:appuser /app
+
 ENV PATH=/usr/local/bin:$PATH
 ENV PYTHONPATH=/app
 
