@@ -62,13 +62,13 @@ jobs:
 
     # ---------------- HADOLINT (FIXED ) ----------------
     - name: Lint API Dockerfile
-      run: docker run --rm -i hadolint/hadolint hadolint -i DL3013 -i DL3042 - < ./api/Dockerfile
+      run: docker run --rm -i hadolint/hadolint hadolint -i DL3013 --ignore DL3042 - < ./api/Dockerfile
 
     - name: Lint Worker Dockerfile
-      run: docker run --rm -i hadolint/hadolint hadolint -i DL3013 -i DL3042 - < ./worker/Dockerfile
+      run: docker run --rm -i hadolint/hadolint hadolint -i DL3013 --ignore DL3042 - < ./worker/Dockerfile
 
     - name: Lint Frontend Dockerfile
-      run: docker run --rm -i hadolint/hadolint hadolint -i DL3013 -i DL3042 - < ./frontend/Dockerfile
+      run: docker run --rm -i hadolint/hadolint hadolint -i DL3013 --ignore DL3042 - < ./frontend/Dockerfile
 
     # =========================================================
     # TEST STAGE
