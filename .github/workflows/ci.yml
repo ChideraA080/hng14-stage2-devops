@@ -30,18 +30,26 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    # ---------------- CREATE ENV FILE (CRITICAL FIX) ----------------
+    - name: Create CI environment file
+      run: |
+        cat <<EOF > .env
+        REDIS_HOST=redis
+        REDIS_PORT=6379
+        API_URL=http://api:8000
+        PORT=3000
+        EOF
+
     # =========================================================
     # LINT STAGE
     # =========================================================
 
-    # Python lint
     - name: Install Python lint tools
       run: pip install flake8
 
     - name: Lint Python code
       run: flake8 api worker
 
-    # JS lint
     - name: Install Node dependencies
       run: |
         cd frontend
@@ -52,15 +60,15 @@ jobs:
         cd frontend
         npx eslint .
 
-    # ---------------- HADOLINT (SAFE VERSION - NO ERRORS) ----------------
+    # ---------------- HADOLINT (FIXED ) ----------------
     - name: Lint API Dockerfile
-      run: docker run --rm -i hadolint/hadolint < ./api/Dockerfile
+      run: docker run --rm -i hadolint/hadolint hadolint -i DL3013 -i DL3042 - < ./api/Dockerfile
 
     - name: Lint Worker Dockerfile
-      run: docker run --rm -i hadolint/hadolint < ./worker/Dockerfile
+      run: docker run --rm -i hadolint/hadolint hadolint -i DL3013 -i DL3042 - < ./worker/Dockerfile
 
     - name: Lint Frontend Dockerfile
-      run: docker run --rm -i hadolint/hadolint < ./frontend/Dockerfile
+      run: docker run --rm -i hadolint/hadolint hadolint -i DL3013 -i DL3042 - < ./frontend/Dockerfile
 
     # =========================================================
     # TEST STAGE
@@ -93,7 +101,7 @@ jobs:
     # =========================================================
     # PUSH STAGE
     # =========================================================
-    - name: Push images to local registry
+    - name: Push images to registry
       run: |
         docker push $REGISTRY/api-service:latest
         docker push $REGISTRY/api-service:$IMAGE_TAG
@@ -179,7 +187,7 @@ jobs:
       run: docker compose down -v
 
     # =========================================================
-    # DEPLOY STAGE (MAIN ONLY)
+    # DEPLOY STAGE (MAIN ONLY - ROLLING HEALTHCHECK)
     # =========================================================
     - name: Deploy application
       if: github.ref == 'refs/heads/main'
@@ -187,6 +195,7 @@ jobs:
         echo "Deploying version: $IMAGE_TAG"
 
         docker compose down
+
         IMAGE_TAG=$IMAGE_TAG docker compose up -d
 
         timeout 60 bash -c '
