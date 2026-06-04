@@ -1,12 +1,12 @@
 from unittest.mock import patch
 from fastapi.testclient import TestClient
-from api.main import app
+from main import app
 
 client = TestClient(app)
 
 
 def test_create_job():
-    with patch("api.main.r") as mock_redis:
+    with patch("main.r") as mock_redis:
         mock_redis.lpush.return_value = 1
 
         response = client.post("/jobs")
@@ -16,7 +16,7 @@ def test_create_job():
 
 
 def test_get_job_status():
-    with patch("api.main.r") as mock_redis:
+    with patch("main.r") as mock_redis:
         mock_redis.get.return_value = b"completed"
 
         response = client.get("/jobs/test-id")
@@ -25,7 +25,7 @@ def test_get_job_status():
 
 
 def test_invalid_job():
-    with patch("api.main.r") as mock_redis:
+    with patch("main.r") as mock_redis:
         mock_redis.get.return_value = None
 
         response = client.get("/jobs/invalid-id")
