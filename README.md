@@ -123,7 +123,7 @@ api      | Application startup complete
 worker   | Worker started successfully
 frontend | Server running on port 3000
 
-Verify Running ContainersAccessing the Application
+Verify Running Containers Accessing the Application
 
 ```
 docker ps
@@ -134,6 +134,9 @@ api → Up (healthy)
 worker → Up (healthy)
 frontend → Up (healthy)
 redis → Up (healthy)
+
+Evidence of Conatainers Accessing App
+![Container Accessing App](https://github.com/ChideraA080/hng14-stage2-devops/blob/main/HNG14%20Stage2%20Screenshot/1000828491.jpg)
 
 ```
 | Service    | URL                                                          |
@@ -150,8 +153,9 @@ Expected response:
 ```
 {"status": "ok"}
 ```
-Confirmation
-![ Architecture Diagram](https://github.com/ChideraA080/hng-stage1/blob/main/Hng%20_Stage1%20Screenshots/Stage1%20Architceture%20Diagram.png)
+Confirmation of Api Health Status
+![Api health status](https://github.com/ChideraA080/hng14-stage2-devops/blob/main/HNG14%20Stage2%20Screenshot/1000828488.jpg)
+
 End-to-End Job Flow Test
 
 Create Job
@@ -175,6 +179,12 @@ Expected:
   "status": "completed"
 }
 ```
+Confirmation of end to end test
+![ end to end test](https://github.com/ChideraA080/hng14-stage2-devops/blob/main/HNG14%20Stage2%20Screenshot/1000828494.jpg)
+
+Evidence on browser on Port 3000
+
+![ end to end test on browser](https://github.com/ChideraA080/hng14-stage2-devops/blob/main/HNG14%20Stage2%20Screenshot/1000828495.jpg)
 
 ## Running Tests
 
@@ -225,7 +235,10 @@ Pipeline Stages
 - New container must pass health checks
 - If health check fails within 60 seconds → rollback
 
-6. Docker Standards Implemented
+Evidence of Success Pipeline
+![Success Pipeline](https://github.com/ChideraA080/hng14-stage2-devops/blob/main/HNG14%20Stage2%20Screenshot/HNG14%20STAGE%202%20Pipeline.png)
+
+### Docker Standards Implemented
 
 Each service includes:
 - Multi-stage builds
